@@ -2,3 +2,4 @@
 *.schem binary
 *.nbt binary
 *.mcstructure binary
+*.blockbrush binary

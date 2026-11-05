@@ -23,10 +23,18 @@ for (const slug of fs.readdirSync(dir).sort()) {
   else if (info.file && !fs.existsSync(file)) bad(`${info.file} not found`);
   else if (info.file && fs.statSync(file).size > MAX_BYTES) bad(`${info.file} is over ${MAX_BYTES / 1024 / 1024} MB`);
   if (info.preview && !fs.existsSync(path.join(dir, slug, info.preview))) bad(`${info.preview} not found`);
+  // the editable Blockbrush file, when its maker included it
+  if (info.project !== undefined) {
+    const proj = path.join(dir, slug, String(info.project));
+    if (typeof info.project !== 'string' || !/\.blockbrush$/i.test(info.project) || info.project.includes('/')) bad('"project" must be a .blockbrush file in the folder');
+    else if (!fs.existsSync(proj)) bad(`${info.project} not found`);
+    else if (fs.statSync(proj).size > MAX_BYTES) bad(`${info.project} is over ${MAX_BYTES / 1024 / 1024} MB`);
+  }
   builds.push({
     id: slug, name: info.name, author: info.author, description: info.description || '',
     tags: info.tags || [], minecraft: info.minecraft, added: info.added || '',
     file: `builds/${slug}/${info.file}`, preview: info.preview ? `builds/${slug}/${info.preview}` : null,
+    project: info.project ? `builds/${slug}/${info.project}` : null,
   });
 }
 

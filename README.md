@@ -12,6 +12,7 @@ builds/
     build.litematic        the build (.litematic, .schem, .nbt or .mcstructure)
     info.json              name, author, tags… (see below)
     preview.png            a picture of the build, made in Blockbrush with no texture pack
+    build.blockbrush       optional: the editable Blockbrush file (layers, houses, shapes)
   _template/               copy this to start a new build
 index.json                 made by scripts/build-index.js, never edited by hand
 ```
@@ -32,10 +33,18 @@ index.json                 made by scripts/build-index.js, never edited by hand
 ```
 
 - `name`, `author`, `tags`, `minecraft`, `file` are required.
+- `project` is optional: `"build.blockbrush"` when the folder has the editable file. Browse then opens that,
+  and offers the schematic too.
 - Tags are lower case, words joined with dashes (`mob-farm`). Use existing tags where one fits.
 - Later the check will open each build in Blockbrush and add its size and block count to the index.
 
 ## Adding a build
+
+The easy way: in Blockbrush, Builds › **Share to the library** (or the Download menu) fills this in, takes the
+picture and downloads the folder. Unzip it, open this repo's `builds` folder, **Add file › Upload files**, drag the
+folder in and propose the change.
+
+By hand:
 
 1. Copy `builds/_template` to `builds/<your-build>` and fill in `info.json`.
 2. Add your build file and a `preview.png`.
