@@ -1,10 +1,10 @@
 {
-  "name": "",
-  "author": "",
-  "description": "",
-  "tags": [],
+  "name": "Showcase",
+  "author": "Kuues",
+  "description": "feature testing",
+  "tags": [test],
   "minecraft": "",
-  "file": "build.litematic",
+  "file": "showcase.litematic",
   "preview": "preview.png",
-  "added": ""
+  "added": "026-11-05"
 }
