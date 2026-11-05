@@ -1,5 +1,8 @@
 # Blockbrush builds
 
+**See them all at [builds.blockbrush.app](https://builds.blockbrush.app)**, made from this repo on every merge
+(`scripts/build-site.js`).
+
 A library of Minecraft builds you can open, walk through and download in
 [Blockbrush](https://blockbrush.app). Each build is a folder with its file, a short
 description and a preview picture. Blockbrush reads `index.json` to list them.
