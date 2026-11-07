@@ -28,7 +28,10 @@ for (const b of index.builds || []) {
     id: b.id, name: text(b.name, 80) || b.id, author: text(b.author, 60), description: text(b.description, 400),
     tags: (Array.isArray(b.tags) ? b.tags : []).filter(t => typeof t === 'string' && SLUG.test(t)).slice(0, 10),
     minecraft: text(b.minecraft, 20), added: /^\d{4}-\d\d-\d\d$/.test(b.added || '') ? b.added : '',
-    file: b.file, preview: okPath(b.preview), project: okPath(b.project)
+    file: b.file, preview: okPath(b.preview), project: okPath(b.project),
+    // counted and measured by scripts/check-builds.js (Blockbrush itself), when it has run
+    blocks: Number.isInteger(b.blocks) && b.blocks > 0 ? b.blocks : 0,
+    size: Array.isArray(b.size) && b.size.length === 3 && b.size.every(n => Number.isInteger(n) && n > 0) ? b.size : null
   });
 }
 
@@ -114,6 +117,7 @@ ${body}
 }
 const openLink = b => OPEN + '#open=' + RAW + (b.project || b.file);
 const byLine = b => [b.author && `by ${esc(b.author)}`, b.minecraft && `Minecraft ${esc(b.minecraft)}`].filter(Boolean).join(' · ');
+const sizeLine = b => b.blocks ? `${b.blocks.toLocaleString('en-US')} blocks${b.size ? ' · ' + b.size.join(' × ') : ''}` : '';
 
 // ---- write it ----
 fs.rmSync(out, { recursive: true, force: true });
@@ -143,6 +147,7 @@ for (const b of builds) {
   <div>
     <h1>${esc(b.name)}</h1>
     <div class="by">${byLine(b)}</div>
+    ${b.blocks ? `<div class="by">${sizeLine(b)}${b.size ? ' (wide × tall × long)' : ''}</div>` : ''}
     ${b.tags.length ? `<ul class="tags" style="margin:8px 0 0">${b.tags.map(t => `<li><a class="tag" href="../?tag=${esc(t)}">${esc(t)}</a></li>`).join('')}</ul>` : ''}
     ${b.description ? `<p class="desc">${esc(b.description)}</p>` : ''}
     <div class="acts">
@@ -170,10 +175,10 @@ fs.writeFileSync(path.join(out, 'index.html'), page({
   body: `<main>
 <h1>Builds</h1>
 <p class="lead">Minecraft builds shared by players. Open one in Blockbrush to look round, walk inside and change it, then download it to paste in your world.</p>
-<div class="bar"><input type="search" id="q" placeholder="Search by name or maker" aria-label="Search builds"><select id="sort" aria-label="Sort"><option value="new">Newest first</option><option value="name">By name</option></select></div>
+<div class="bar"><input type="search" id="q" placeholder="Search by name or maker" aria-label="Search builds"><select id="sort" aria-label="Sort"><option value="new">Newest first</option><option value="name">By name</option><option value="big">Biggest first</option><option value="small">Smallest first</option></select></div>
 ${tagList.length ? `<ul class="tags" aria-label="Show only builds with this tag">${tagList.map(t => `<li><button type="button" class="tag" data-tag="${esc(t)}" aria-pressed="false">${esc(t)}</button></li>`).join('')}</ul>` : ''}
 <ul class="grid" id="grid">
-${sorted.map(b => `<li data-name="${esc((b.name + ' ' + b.author).toLowerCase())}" data-tags=" ${esc(b.tags.join(' '))} " data-added="${esc(b.added)}" data-title="${esc(b.name.toLowerCase())}"><a class="card" href="${esc(b.id)}/">${b.pic ? `<img class="pic" src="${esc(b.id)}/${b.pic}" alt="" loading="lazy">` : `<div class="pic"></div>`}<span class="name">${esc(b.name)}</span><span class="by">${byLine(b)}</span>${b.tags.length ? `<span class="tags" style="margin:2px 0 0">${b.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</span>` : ''}</a></li>`).join('\n')}
+${sorted.map(b => `<li data-name="${esc((b.name + ' ' + b.author).toLowerCase())}" data-tags=" ${esc(b.tags.join(' '))} " data-added="${esc(b.added)}" data-title="${esc(b.name.toLowerCase())}" data-blocks="${b.blocks}"><a class="card" href="${esc(b.id)}/">${b.pic ? `<img class="pic" src="${esc(b.id)}/${b.pic}" alt="" loading="lazy">` : `<div class="pic"></div>`}<span class="name">${esc(b.name)}</span><span class="by">${byLine(b)}</span>${b.blocks ? `<span class="by">${sizeLine(b)}</span>` : ''}${b.tags.length ? `<span class="tags" style="margin:2px 0 0">${b.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</span>` : ''}</a></li>`).join('\n')}
 </ul>
 <p class="empty" id="none"${builds.length ? ' hidden' : ''}>${builds.length ? 'No builds match.' : 'No builds yet. Be the first: <a href="' + esc(REPO) + '#adding-a-build">add yours</a>.'}</p>
 </main>
@@ -183,7 +188,13 @@ ${sorted.map(b => `<li data-name="${esc((b.name + ' ' + b.author).toLowerCase())
   var items = [].slice.call(grid.children), tag = new URLSearchParams(location.search).get("tag") || "";
   function show() {
     var s = q.value.trim().toLowerCase(), n = 0;
-    items.sort(function (a, b) { return sort.value === "name" ? a.dataset.title.localeCompare(b.dataset.title) : b.dataset.added.localeCompare(a.dataset.added) || a.dataset.title.localeCompare(b.dataset.title); });
+    items.sort(function (a, b) {
+      var x = +a.dataset.blocks || 0, y = +b.dataset.blocks || 0;
+      if (sort.value === "name") return a.dataset.title.localeCompare(b.dataset.title);
+      // by size: builds the check hasn't counted yet go last
+      if (sort.value === "big" || sort.value === "small") return (!x - !y) || (sort.value === "big" ? y - x : x - y) || a.dataset.title.localeCompare(b.dataset.title);
+      return b.dataset.added.localeCompare(a.dataset.added) || a.dataset.title.localeCompare(b.dataset.title);
+    });
     items.forEach(function (li) { var on = (!s || li.dataset.name.indexOf(s) >= 0) && (!tag || li.dataset.tags.indexOf(" " + tag + " ") >= 0); li.hidden = !on; if (on) n++; grid.appendChild(li); });
     [].forEach.call(document.querySelectorAll("button.tag"), function (b) { b.setAttribute("aria-pressed", String(b.dataset.tag === tag)); });
     if (items.length) none.hidden = n > 0;

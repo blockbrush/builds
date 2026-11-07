@@ -3,42 +3,101 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch: # run by hand: checks every build again and rewrites them
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'pages' }}
   cancel-in-progress: false
 jobs:
-  index:
+  # A pull request: read every info.json, then open the builds it adds or changes in Blockbrush itself.
+  # Runs with a read-only token and no secrets (pull_request, never pull_request_target), as the files are the sender's.
+  check:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: What the pull request changes
+        id: changed
+        run: |
+          files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)
+          folders=$(printf '%s\n' "$files" | sed -n 's|^builds/\([^/_][^/]*\)/.*|builds/\1|p' | sort -u | tr '\n' ' ')
+          echo "folders=$folders" >> "$GITHUB_OUTPUT"
+          other=$(printf '%s\n' "$files" | grep -v -E '^builds/[^/_][^/]*/' || true)
+          if [ -n "$other" ]; then
+            echo "::warning::This pull request changes more than build folders. Look at these closely before merging: $(echo $other)"
+            { echo "## Changes outside build folders"; echo; echo "Look at these closely before merging (scripts and workflows run with write access once merged):"; echo; printf '%s\n' "$other" | sed 's/^/- /'; echo; } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Check every info.json
         run: node scripts/build-index.js --check
+      - name: Get Chrome
+        if: steps.changed.outputs.folders != ''
+        run: npm ci && npx puppeteer browsers install chrome
+      - name: Open the builds in Blockbrush
+        if: steps.changed.outputs.folders != ''
+        run: node scripts/check-builds.js ${{ steps.changed.outputs.folders }}
+      - name: Make the website
+        run: node scripts/build-index.js && node scripts/build-site.js
+
+  # Merged: the new or changed builds are replaced by Blockbrush's own re-export and counted (check.json), then the
+  # index and the website (builds.blockbrush.app) are made again.
+  index:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Which builds changed
+        id: changed
+        run: |
+          before="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$before" ] || ! git cat-file -e "$before" 2>/dev/null; then
+            folders=$(ls -d builds/*/ | grep -v '^builds/_' | tr '\n' ' ')
+          else
+            folders=$(git diff --name-only "$before" HEAD | sed -n 's|^builds/\([^/_][^/]*\)/.*|builds/\1|p' | sort -u | while read -r d; do [ -d "$d" ] && echo "$d"; done | tr '\n' ' ')
+          fi
+          echo "folders=$folders" >> "$GITHUB_OUTPUT"
+      - name: Get Chrome
+        if: steps.changed.outputs.folders != ''
+        run: npm ci && npx puppeteer browsers install chrome
+      - name: Open the builds in Blockbrush and store its re-export
+        if: steps.changed.outputs.folders != ''
+        continue-on-error: true # a build that fails keeps its files; the rest still go out
+        run: node scripts/check-builds.js --write ${{ steps.changed.outputs.folders }}
       - name: Write index.json
-        if: github.event_name == 'push'
         run: |
           node scripts/build-index.js
-          if ! git diff --quiet index.json; then
+          git add -A builds index.json
+          if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Update index.json" index.json
+            git commit -m "Check builds in Blockbrush and update index.json"
             git push
           fi
-      # the website (builds.blockbrush.app): a gallery and a page per build, made from the folders
       - name: Make the website
         run: node scripts/build-site.js
       - name: Upload the website
-        if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
   deploy:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs: index
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

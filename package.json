@@ -1,0 +1,13 @@
+{
+  "name": "blockbrush-builds",
+  "private": true,
+  "description": "Checks and the website for the Blockbrush builds library",
+  "scripts": {
+    "check": "node scripts/build-index.js --check && node scripts/check-builds.js --all",
+    "index": "node scripts/build-index.js",
+    "site": "node scripts/build-site.js"
+  },
+  "devDependencies": {
+    "puppeteer": "23.11.1"
+  }
+}
